@@ -2,10 +2,12 @@ use std::sync::Arc;
 
 use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage};
 use vulkano::command_buffer::allocator::{StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo};
-use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferInfo};
+use vulkano::command_buffer::{AutoCommandBufferBuilder, ClearColorImageInfo, CommandBufferUsage, CopyBufferInfo, CopyImageToBufferInfo};
 use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
 use vulkano::descriptor_set::{PersistentDescriptorSet, WriteDescriptorSet};
 use vulkano::device::{self, Device, DeviceCreateInfo, QueueCreateInfo, QueueFlags};
+use vulkano::format::{ClearColorValue, Format};
+use vulkano::image::{Image, ImageCreateInfo, ImageType, ImageUsage};
 use vulkano::pipeline::compute::ComputePipelineCreateInfo;
 use vulkano::pipeline::layout::PipelineDescriptorSetLayoutCreateInfo;
 use vulkano::pipeline::{self, ComputePipeline, Pipeline, PipelineBindPoint, PipelineLayout, PipelineShaderStageCreateInfo};
@@ -13,6 +15,8 @@ use vulkano::VulkanLibrary;
 use vulkano::instance::{ Instance, InstanceCreateInfo };
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator};
 use vulkano::sync::{self, GpuFuture};
+
+use image::{ImageBuffer, Rgba};
 
 // The compute shader
 mod cs {
@@ -71,22 +75,36 @@ fn main() {
 
     let queue = queues.next().unwrap();
 
-    // Creating buffers
+    // Creating the image and buffer
     let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
-
-    let data_buffer = Buffer::from_iter(
+    let image = Image::new(
         memory_allocator.clone(),
-        BufferCreateInfo {
-            usage: BufferUsage::STORAGE_BUFFER,
+        ImageCreateInfo {
+            image_type: ImageType::Dim2d,
+            format: Format::R8G8B8A8_UNORM,
+            extent: [1024, 1024, 1],
+            usage: ImageUsage::TRANSFER_SRC | ImageUsage::TRANSFER_DST,
             ..Default::default()
         },
         AllocationCreateInfo {
-            memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
-                | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-                ..Default::default()
+            memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
+            ..Default::default()
+        }).unwrap();
+
+    let buf = Buffer::from_iter(
+        memory_allocator.clone(),
+        BufferCreateInfo {
+            usage: BufferUsage::TRANSFER_DST,
+            ..Default::default()
         },
-        0..65536u32)
+        AllocationCreateInfo {
+            memory_type_filter: MemoryTypeFilter::PREFER_HOST
+                | MemoryTypeFilter::HOST_RANDOM_ACCESS,
+            ..Default::default()
+        },
+        (0..1024 * 1024 * 4).map(|_| 0u8))
         .expect("failed to create buffer");
+
 
     // Loading the shader
     let shader = cs::load(device.clone()).expect("failed to create the shader module");
@@ -122,7 +140,7 @@ fn main() {
     let descriptor_set = PersistentDescriptorSet::new(
         &descriptor_set_allocator,
         descriptor_set_layout.clone(),
-        [WriteDescriptorSet::buffer(0, data_buffer.clone())],
+        [],
         []).unwrap();
 
     // Dispatch the compute pipeline
@@ -133,22 +151,31 @@ fn main() {
     let mut command_buffer_builder = AutoCommandBufferBuilder::primary(
         &command_buffer_allocator,
         queue.queue_family_index(),
-        CommandBufferUsage::OneTimeSubmit
-        ).unwrap();
+        CommandBufferUsage::OneTimeSubmit).unwrap();
 
     let work_group_counts = [1024, 1, 1];
 
+    //command_buffer_builder
+        //.bind_pipeline_compute(compute_pipeline.clone())
+        //.unwrap()
+        //.bind_descriptor_sets(
+            //PipelineBindPoint::Compute,
+            //compute_pipeline.layout().clone(),
+            //descriptor_set_layout_index as u32,
+            //descriptor_set)
+        //.unwrap()
+        //.dispatch(work_group_counts)
+        //.unwrap();
+
     command_buffer_builder
-        .bind_pipeline_compute(compute_pipeline.clone())
-        .unwrap()
-        .bind_descriptor_sets(
-            PipelineBindPoint::Compute,
-            compute_pipeline.layout().clone(),
-            descriptor_set_layout_index as u32,
-            descriptor_set)
-        .unwrap()
-        .dispatch(work_group_counts)
-        .unwrap();
+        .clear_color_image(ClearColorImageInfo {
+            clear_value: ClearColorValue::Float([0.0, 0.0, 1.0, 1.0]),
+            ..ClearColorImageInfo::image(image.clone())
+        }).unwrap()
+        .copy_image_to_buffer(CopyImageToBufferInfo::image_buffer(
+            image.clone(),
+            buf.clone())
+        ).unwrap();
 
     let command_buffer = command_buffer_builder.build().unwrap();
 
@@ -161,10 +188,10 @@ fn main() {
 
     future.wait(None).unwrap();
 
-    let content = data_buffer.read().unwrap();
-    for (n, val) in content.iter().enumerate() {
-        assert_eq!(*val, n as u32 * 12);
-    }
+    let buffer_content = buf.read().unwrap();
+    let image = ImageBuffer::<Rgba<u8>, _>::from_raw(1024, 1024, &buffer_content[..]).unwrap();
+
+    image.save("image.png").unwrap();
 
     println!("Everything succeeded!");
 }
