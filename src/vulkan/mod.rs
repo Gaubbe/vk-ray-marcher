@@ -9,6 +9,7 @@ use vulkano::memory::allocator::StandardMemoryAllocator;
 
 mod instance;
 mod device;
+mod pipeline;
 
 pub struct VulkanContext {
     pub instance: Arc<Instance>,
