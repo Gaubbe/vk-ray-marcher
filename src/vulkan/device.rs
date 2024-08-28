@@ -3,7 +3,7 @@ use vulkano::instance::Instance;
 use vulkano::device::{Device, DeviceCreateInfo, Queue, QueueCreateInfo, QueueFlags};
 use vulkano::device::physical::PhysicalDevice;
 
-pub fn create_device(instance: &Arc<Instance>) -> (Arc<Device>, Vec<Arc<Queue>>) {
+pub fn create_device(instance: &Arc<Instance>) -> (Arc<Device>, u32, Vec<Arc<Queue>>) {
     let physical_device = choose_physical_device(instance);
 
     let queue_family_index = physical_device
@@ -26,7 +26,7 @@ pub fn create_device(instance: &Arc<Instance>) -> (Arc<Device>, Vec<Arc<Queue>>)
         })
         .expect("Could not create Vulkan logical device.");
 
-    return (device, queues.collect());
+    return (device, queue_family_index, queues.collect());
 }
 
 fn choose_physical_device(instance: &Arc<Instance>) -> Arc<PhysicalDevice> {
