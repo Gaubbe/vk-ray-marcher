@@ -4,8 +4,11 @@ use vulkano::command_buffer::allocator::{
     StandardCommandBufferAllocatorCreateInfo
 };
 use vulkano::instance::Instance;
-use vulkano::device::{Device, Queue};
+use vulkano::device::{Device, DeviceExtensions, Queue};
 use vulkano::memory::allocator::StandardMemoryAllocator;
+use vulkano::swapchain::Surface;
+use winit::event_loop::EventLoop;
+use winit::window::Window;
 
 mod instance;
 mod device;
@@ -13,6 +16,8 @@ mod pipeline;
 
 pub struct VulkanContext {
     pub instance: Arc<Instance>,
+    pub surface: Arc<Surface>,
+    pub device_extensions: DeviceExtensions,
     pub device: Arc<Device>,
     pub queue_family_index: u32,
     pub queues: Vec<Arc<Queue>>,
@@ -21,10 +26,20 @@ pub struct VulkanContext {
 }
 
 impl VulkanContext {
-    pub fn new() -> VulkanContext {
-        let instance = instance::create_vulkan_instance();
+    pub fn new(event_loop: &EventLoop<()>, window: &Arc<Window>) -> VulkanContext {
+        let required_extensions = Surface::required_extensions(event_loop);
 
-        let (device, queue_family_index, mut queues) = device::create_device(&instance);
+        let instance = instance::create_vulkan_instance(required_extensions);
+
+        let surface = Surface::from_window(instance.clone(), window.clone())
+            .expect("Could not create surface.");
+
+        let (
+            device_extensions,
+            device,
+            queue_family_index,
+            mut queues,
+        ) = device::create_device(&instance, &surface);
 
         let memory_allocator = Arc::new(
             StandardMemoryAllocator::new_default(device.clone())
@@ -37,6 +52,8 @@ impl VulkanContext {
 
         VulkanContext {
             instance,
+            surface,
+            device_extensions,
             device,
             queue_family_index,
             queues,
