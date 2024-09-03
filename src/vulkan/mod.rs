@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use vulkano::buffer::Subbuffer;
 use vulkano::command_buffer::allocator::{
     StandardCommandBufferAllocator,
     StandardCommandBufferAllocatorCreateInfo
@@ -11,7 +12,8 @@ use vulkano::memory::allocator::StandardMemoryAllocator;
 use vulkano::pipeline::graphics::viewport::Viewport;
 use vulkano::pipeline::GraphicsPipeline;
 use vulkano::render_pass::{Framebuffer, RenderPass};
-use vulkano::swapchain::{Surface, Swapchain};
+use vulkano::shader::ShaderModule;
+use vulkano::swapchain::{Surface, Swapchain, SwapchainCreateInfo};
 use winit::event_loop::EventLoop;
 use winit::window::Window;
 
@@ -33,11 +35,15 @@ pub struct VulkanContext {
     pub physical_device: Arc<PhysicalDevice>,
     pub device: Arc<Device>,
     pub queue_family_index: u32,
-    pub queues: Vec<Arc<Queue>>,
-    pub memory_allocator: Arc<StandardMemoryAllocator>,
+    pub queue: Arc<Queue>,
     pub swapchain: Arc<Swapchain>,
     pub render_pass: Arc<RenderPass>,
     pub framebuffers: Vec<Arc<Framebuffer>>,
+    pub memory_allocator: Arc<StandardMemoryAllocator>,
+    pub vertex_buffer: Subbuffer<[Vertex]>,
+    pub viewport: Viewport,
+    pub vs: Arc<ShaderModule>,
+    pub fs: Arc<ShaderModule>,
     pub pipeline: Arc<GraphicsPipeline>,
     pub command_buffer_allocator: StandardCommandBufferAllocator,
     pub command_buffers: Vec<Arc<PrimaryAutoCommandBuffer>>,
@@ -60,7 +66,7 @@ impl VulkanContext {
             mut queues,
         ) = device::create_device(&instance, &surface);
 
-        let queue = queues.iter().next().unwrap();
+        let queue = queues.into_iter().next().unwrap();
 
         let (swapchain, images) = swapchain::get_swapchain(
             &physical_device,
@@ -98,7 +104,7 @@ impl VulkanContext {
             &swapchain,
             &vs,
             &fs,
-            viewport,
+            viewport.clone(),
             &render_pass,
         );
 
@@ -109,7 +115,7 @@ impl VulkanContext {
 
         let command_buffers = command_buffers::get_command_buffers(
             &command_buffer_allocator,
-            queue,
+            &queue,
             &pipeline,
             &framebuffers,
             &vertex_buffer,
@@ -122,14 +128,59 @@ impl VulkanContext {
             physical_device,
             device,
             queue_family_index,
-            queues,
-            memory_allocator,
+            queue,
             swapchain,
             render_pass,
             framebuffers,
+            memory_allocator,
+            vertex_buffer,
+            viewport,
+            vs,
+            fs,
             pipeline,
             command_buffer_allocator,
             command_buffers,
+        }
+    }
+
+    pub fn recreate_swapchain(
+        &mut self,
+        window: &Arc<Window>,
+        window_resized: bool,
+    ) {
+        let new_dimensions = window.inner_size();
+
+        let (new_swapchain, new_images) = self.swapchain
+            .recreate(
+                SwapchainCreateInfo {
+                    image_extent: new_dimensions.into(),
+                    ..self.swapchain.create_info()
+                }
+            ).expect("Failed to recreate swapchain: {e}");
+        self.swapchain = new_swapchain;
+        let new_framebuffers = swapchain::get_framebuffers(
+            &new_images,
+            &self.render_pass,
+        );
+
+        if window_resized {
+            self.viewport.extent = new_dimensions.into();
+            let new_pipeline = pipeline::get_pipeline::<Vertex>(
+                &self.device,
+                &self.swapchain,
+                &self.vs,
+                &self.fs,
+                self.viewport.clone(),
+                &self.render_pass,
+            );
+            self.pipeline = new_pipeline;
+            self.command_buffers = command_buffers::get_command_buffers(
+                &self.command_buffer_allocator,
+                &self.queue,
+                &self.pipeline,
+                &new_framebuffers,
+                &self.vertex_buffer,
+            );
         }
     }
 }
