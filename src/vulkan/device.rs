@@ -13,6 +13,7 @@ use vulkano::swapchain::Surface;
 
 pub fn create_device(instance: &Arc<Instance>, surface: &Arc<Surface>) -> (
     DeviceExtensions,
+    Arc<PhysicalDevice>,
     Arc<Device>,
     u32,
     Vec<Arc<Queue>>,
@@ -29,7 +30,7 @@ pub fn create_device(instance: &Arc<Instance>, surface: &Arc<Surface>) -> (
     );
 
     let (device, queues) = Device::new(
-        physical_device,
+        physical_device.clone(),
         DeviceCreateInfo {
             queue_create_infos: vec![QueueCreateInfo {
                 queue_family_index,
@@ -40,7 +41,13 @@ pub fn create_device(instance: &Arc<Instance>, surface: &Arc<Surface>) -> (
         })
         .expect("Could not create Vulkan logical device.");
 
-    return (device_extensions, device, queue_family_index, queues.collect());
+    return (
+        device_extensions,
+        physical_device,
+        device,
+        queue_family_index,
+        queues.collect(),
+    );
 }
 
 fn choose_physical_device(

@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use vulkano::format::Format;
 use vulkano::render_pass::RenderPass;
 use vulkano::device::Device;
 use vulkano::swapchain::Swapchain;
