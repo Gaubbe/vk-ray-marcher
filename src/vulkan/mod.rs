@@ -3,6 +3,7 @@ use vulkano::command_buffer::allocator::{
     StandardCommandBufferAllocator,
     StandardCommandBufferAllocatorCreateInfo
 };
+use vulkano::command_buffer::PrimaryAutoCommandBuffer;
 use vulkano::device::physical::PhysicalDevice;
 use vulkano::instance::Instance;
 use vulkano::device::{Device, DeviceExtensions, Queue};
@@ -23,6 +24,7 @@ mod render_pass;
 mod vertex;
 mod shaders;
 mod pipeline;
+mod command_buffers;
 
 pub struct VulkanContext {
     pub instance: Arc<Instance>,
@@ -38,6 +40,7 @@ pub struct VulkanContext {
     pub framebuffers: Vec<Arc<Framebuffer>>,
     pub pipeline: Arc<GraphicsPipeline>,
     pub command_buffer_allocator: StandardCommandBufferAllocator,
+    pub command_buffers: Vec<Arc<PrimaryAutoCommandBuffer>>,
 }
 
 impl VulkanContext {
@@ -56,6 +59,8 @@ impl VulkanContext {
             queue_family_index,
             mut queues,
         ) = device::create_device(&instance, &surface);
+
+        let queue = queues.iter().next().unwrap();
 
         let (swapchain, images) = swapchain::get_swapchain(
             &physical_device,
@@ -102,6 +107,14 @@ impl VulkanContext {
             StandardCommandBufferAllocatorCreateInfo::default()
         );
 
+        let command_buffers = command_buffers::get_command_buffers(
+            &command_buffer_allocator,
+            queue,
+            &pipeline,
+            &framebuffers,
+            &vertex_buffer,
+        );
+
         VulkanContext {
             instance,
             surface,
@@ -116,6 +129,7 @@ impl VulkanContext {
             framebuffers,
             pipeline,
             command_buffer_allocator,
+            command_buffers,
         }
     }
 }
