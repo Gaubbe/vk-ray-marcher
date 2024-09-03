@@ -1,7 +1,7 @@
 use core::panic;
 use std::{sync::Arc, usize};
 
-use vulkano::{swapchain::{self, SwapchainPresentInfo}, sync::{self, GpuFuture}, Validated, VulkanError};
+use vulkano::{swapchain::{self, SwapchainPresentInfo}, sync::{self, future::FenceSignalFuture, GpuFuture}, Validated, VulkanError};
 use winit::{event::{Event, WindowEvent}, event_loop::{ControlFlow, EventLoop}, window::WindowBuilder};
 
 mod vulkan;
@@ -15,6 +15,10 @@ fn main() {
 
     let mut window_resized = false;
     let mut recreate_swapchain = false;
+
+    let frames_in_flight = context.framebuffers.len();
+    let mut fences : Vec<Option<Arc<FenceSignalFuture<_>>>> = vec![None; frames_in_flight];
+    let mut previous_fence_i = 0;
 
     event_loop.run(move |event, _, control_flow| match event {
         Event::WindowEvent {
@@ -53,29 +57,45 @@ fn main() {
                 recreate_swapchain = true;
             }
 
-            let execution = sync::now(context.device.clone())
+            if let Some(image_fence) = &fences[image_i as usize] {
+                image_fence.wait(None).unwrap();
+            }
+
+            let previous_future = match fences[previous_fence_i as usize].clone() {
+                None => {
+                    let mut now = sync::now(context.device.clone());
+                    now.cleanup_finished();
+
+                    now.boxed()
+                }
+                Some(fence) => fence.boxed(),
+            };
+
+            let future = previous_future
                 .join(acquire_future)
                 .then_execute(
                     context.queue.clone(),
                     context.command_buffers[image_i as usize].clone(),
-                ).unwrap()
+                )
+                .unwrap()
                 .then_swapchain_present(
                     context.queue.clone(),
                     SwapchainPresentInfo::swapchain_image_index(
                         context.swapchain.clone(),
                         image_i,
                     )
-                ).then_signal_fence_and_flush();
+                )
+                .then_signal_fence_and_flush();
 
-            match execution.map_err(Validated::unwrap) {
-                Ok(future) => {
-                    future.wait(None).unwrap();
-                }
+            fences[image_i as usize] = match future.map_err(Validated::unwrap) {
+                Ok(value) => Some(Arc::new(value)),
                 Err(VulkanError::OutOfDate) => {
                     recreate_swapchain = true;
+                    None
                 }
                 Err(e) => {
-                    println!("failed to flush future: {e}");
+                    println!("Failed to flush future: {e}");
+                    None
                 }
             };
         }
