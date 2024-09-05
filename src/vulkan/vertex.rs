@@ -23,9 +23,12 @@ pub fn create_vertex_buffer(memory_allocator: &Arc<StandardMemoryAllocator>) -> 
             ..Default::default()
         },
         vec![
-            Vertex { position: [-0.5, -0.5] },
-            Vertex { position: [ 0.0,  0.5] },
-            Vertex { position: [ 0.5, -0.25] },
+            Vertex { position: [-1.0, -1.0] },
+            Vertex { position: [ 1.0, -1.0] },
+            Vertex { position: [ 1.0,  1.0] },
+            Vertex { position: [-1.0, -1.0] },
+            Vertex { position: [ 1.0,  1.0] },
+            Vertex { position: [-1.0,  1.0] },
         ]
-        ).expect("Could not create the vertex buffer.")
+    ).expect("Could not create the vertex buffer.")
 }
