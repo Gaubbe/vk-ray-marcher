@@ -50,7 +50,7 @@ fn main() {
                         recreate_swapchain = true;
                         return;
                     }
-                    Err(e) => panic!("Failed to acquire next image"),
+                    Err(_) => panic!("Failed to acquire next image"),
                 };
 
             if suboptimal {
@@ -98,6 +98,8 @@ fn main() {
                     None
                 }
             };
+
+            previous_fence_i = image_i;
         }
         _ => (),
     });

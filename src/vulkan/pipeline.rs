@@ -12,19 +12,18 @@ use vulkano::pipeline::{GraphicsPipeline, PipelineLayout, PipelineShaderStageCre
 use vulkano::pipeline::graphics::viewport::{Viewport, ViewportState};
 use vulkano::render_pass::{RenderPass, Subpass};
 use vulkano::shader::ShaderModule;
-use vulkano::swapchain::Swapchain;
 
 pub fn get_pipeline<V>(
     device: &Arc<Device>,
-    swapchain: &Arc<Swapchain>,
     vs: &Arc<ShaderModule>,
     fs: &Arc<ShaderModule>,
     viewport: Viewport,
     render_pass: &Arc<RenderPass>,
-) -> Arc<GraphicsPipeline>
+) -> (Arc<PipelineLayout>, Arc<GraphicsPipeline>)
 where
     V: Vertex
 {
+
     let vs = vs.entry_point("main").unwrap();
     let fs = fs.entry_point("main").unwrap();
 
@@ -46,25 +45,28 @@ where
 
     let subpass = Subpass::from(render_pass.clone(), 0).unwrap();
 
-    GraphicsPipeline::new(
-        device.clone(),
-        None,
-        GraphicsPipelineCreateInfo {
-            stages: stages.into_iter().collect(),
-            vertex_input_state: Some(vertex_input_state),
-            input_assembly_state: Some(InputAssemblyState::default()),
-            viewport_state: Some(ViewportState {
-                viewports: [viewport].into_iter().collect(),
-                ..Default::default()
-            }),
-            rasterization_state: Some(RasterizationState::default()),
-            multisample_state: Some(MultisampleState::default()),
-            color_blend_state: Some(ColorBlendState::with_attachment_states(
-                subpass.num_color_attachments(),
-                ColorBlendAttachmentState::default(),
-            )),
-            subpass: Some(subpass.into()),
-            ..GraphicsPipelineCreateInfo::layout(layout)
-        },
-    ).unwrap()
+    (
+        layout.clone(),
+        GraphicsPipeline::new(
+            device.clone(),
+            None,
+            GraphicsPipelineCreateInfo {
+                stages: stages.into_iter().collect(),
+                vertex_input_state: Some(vertex_input_state),
+                input_assembly_state: Some(InputAssemblyState::default()),
+                viewport_state: Some(ViewportState {
+                    viewports: [viewport].into_iter().collect(),
+                    ..Default::default()
+                }),
+                rasterization_state: Some(RasterizationState::default()),
+                multisample_state: Some(MultisampleState::default()),
+                color_blend_state: Some(ColorBlendState::with_attachment_states(
+                    subpass.num_color_attachments(),
+                    ColorBlendAttachmentState::default(),
+                )),
+                subpass: Some(subpass.into()),
+                ..GraphicsPipelineCreateInfo::layout(layout.clone())
+            },
+        ).unwrap(),
+    )
 }

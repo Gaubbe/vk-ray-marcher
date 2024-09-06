@@ -4,21 +4,24 @@ use vulkano::buffer::Subbuffer;
 use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer, RenderPassBeginInfo, SubpassBeginInfo, SubpassContents, SubpassEndInfo};
 use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
 use vulkano::device::Queue;
-use vulkano::pipeline::GraphicsPipeline;
+use vulkano::pipeline::{GraphicsPipeline, PipelineLayout};
 use vulkano::render_pass::Framebuffer;
 
+use super::shaders;
 use super::vertex::Vertex;
 
 pub fn get_command_buffers(
     command_buffer_allocator: &StandardCommandBufferAllocator,
     queue: &Arc<Queue>,
+    pipeline_layout: &Arc<PipelineLayout>,
     pipeline: &Arc<GraphicsPipeline>,
     framebuffers: &Vec<Arc<Framebuffer>>,
     vertex_buffer: &Subbuffer<[Vertex]>,
+    push_constants: shaders::fs::constants,
 ) -> Vec<Arc<PrimaryAutoCommandBuffer>>{
     framebuffers
         .iter()
-        .map(|framebuffer| {
+        .map(move |framebuffer| {
             let mut builder = AutoCommandBufferBuilder::primary(
                 command_buffer_allocator,
                 queue.queue_family_index(),
@@ -39,6 +42,8 @@ pub fn get_command_buffers(
                 .bind_pipeline_graphics(pipeline.clone())
                 .unwrap()
                 .bind_vertex_buffers(0, vertex_buffer.clone())
+                .unwrap()
+                .push_constants(pipeline_layout.clone(), 0, push_constants)
                 .unwrap()
                 .draw(vertex_buffer.len() as u32, 1, 0, 0)
                 .unwrap()
