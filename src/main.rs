@@ -2,14 +2,23 @@ use core::panic;
 use std::{sync::Arc, usize};
 
 use vulkano::{swapchain::{self, SwapchainPresentInfo}, sync::{self, future::FenceSignalFuture, GpuFuture}, Validated, VulkanError};
-use winit::{event::{Event, WindowEvent}, event_loop::{ControlFlow, EventLoop}, window::WindowBuilder};
+use winit::{dpi::LogicalSize, event::{Event, WindowEvent}, event_loop::{ControlFlow, EventLoop}, window::WindowBuilder};
 
 mod vulkan;
 
 fn main() {
     let event_loop = EventLoop::new();
 
-    let window = Arc::new(WindowBuilder::new().build(&event_loop).unwrap());
+    let window = Arc::new(
+        WindowBuilder::new()
+//            .with_resizable(false)
+            .with_inner_size(LogicalSize::<u32> {
+                width: 1280,
+                height: 720,
+            })
+            .build(&event_loop)
+            .unwrap()
+        );
 
     let mut context = vulkan::VulkanContext::new(&event_loop, &window);
 
