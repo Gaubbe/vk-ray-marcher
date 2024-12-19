@@ -10,7 +10,7 @@ use vulkano::instance::Instance;
 use vulkano::device::{Device, DeviceExtensions, Queue};
 use vulkano::memory::allocator::StandardMemoryAllocator;
 use vulkano::pipeline::graphics::viewport::Viewport;
-use vulkano::pipeline::GraphicsPipeline;
+use vulkano::pipeline::{GraphicsPipeline, PipelineLayout};
 use vulkano::render_pass::{Framebuffer, RenderPass};
 use vulkano::shader::ShaderModule;
 use vulkano::swapchain::{Surface, Swapchain, SwapchainCreateInfo};
@@ -44,6 +44,7 @@ pub struct VulkanContext {
     pub viewport: Viewport,
     pub vs: Arc<ShaderModule>,
     pub fs: Arc<ShaderModule>,
+    pub pipeline_layout: Arc<PipelineLayout>,
     pub pipeline: Arc<GraphicsPipeline>,
     pub command_buffer_allocator: StandardCommandBufferAllocator,
     pub command_buffers: Vec<Arc<PrimaryAutoCommandBuffer>>,
@@ -63,7 +64,7 @@ impl VulkanContext {
             physical_device,
             device,
             queue_family_index,
-            mut queues,
+            queues,
         ) = device::create_device(&instance, &surface);
 
         let queue = queues.into_iter().next().unwrap();
@@ -99,9 +100,8 @@ impl VulkanContext {
         let fs = shaders::fs::load(device.clone())
             .expect("Could not load fragment shader.");
 
-        let pipeline = pipeline::get_pipeline::<Vertex>(
+        let (pipeline_layout, pipeline) = pipeline::get_pipeline::<Vertex>(
             &device,
-            &swapchain,
             &vs,
             &fs,
             viewport.clone(),
@@ -116,9 +116,15 @@ impl VulkanContext {
         let command_buffers = command_buffers::get_command_buffers(
             &command_buffer_allocator,
             &queue,
+            &pipeline_layout,
             &pipeline,
             &framebuffers,
             &vertex_buffer,
+            shaders::fs::constants {
+                windowSize: window.inner_size().into(),
+                fov: 90.0,
+                nearPlane: 1.0,
+            }
         );
 
         VulkanContext {
@@ -137,6 +143,7 @@ impl VulkanContext {
             viewport,
             vs,
             fs,
+            pipeline_layout,
             pipeline,
             command_buffer_allocator,
             command_buffers,
@@ -167,19 +174,24 @@ impl VulkanContext {
             self.viewport.extent = new_dimensions.into();
             let new_pipeline = pipeline::get_pipeline::<Vertex>(
                 &self.device,
-                &self.swapchain,
                 &self.vs,
                 &self.fs,
                 self.viewport.clone(),
                 &self.render_pass,
             );
-            self.pipeline = new_pipeline;
+            (self.pipeline_layout, self.pipeline) = new_pipeline;
             self.command_buffers = command_buffers::get_command_buffers(
                 &self.command_buffer_allocator,
                 &self.queue,
+                &self.pipeline_layout,
                 &self.pipeline,
                 &new_framebuffers,
                 &self.vertex_buffer,
+                shaders::fs::constants {
+                    windowSize: window.inner_size().into(),
+                    fov: 90.0,
+                    nearPlane: 1.0,
+                }
             );
         }
     }
